@@ -1,0 +1,99 @@
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}
+
+.blog-card {
+  transition: all 0.3s;
+}
+
+.blog-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.blog-content {
+  white-space: pre-line;
+}
+
+.login-form {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-dashboard {
+  margin-bottom: 30px;
+}
+
+.admin-blog-item {
+  transition: all 0.2s;
+}
+
+.admin-blog-item:hover {
+  background-color: #f8f9fa;
+}
+
+footer {
+  margin-top: auto;
+}
+
+/* New styles for the enhanced features */
+.attachment-preview {
+  max-width: 100%;
+  max-height: 250px;
+  display: block;
+  margin: 15px auto;
+  border-radius: 5px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.attachment-card {
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  padding: 10px;
+  margin-top: 15px;
+}
+
+.search-box {
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.category-badge {
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.pdf-preview {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background: #f1f1f1;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.pdf-icon {
+  font-size: 2rem;
+  color: #dc3545;
+  margin-right: 15px;
+}
