@@ -14,7 +14,7 @@ const Footer = () => {
               SVIT News
             </h5>
             <p className="mb-3">
-              The official news platform for Sri Vasavi Institute of Technology students and faculty.
+              The official news platform for SVIT students and faculty.
               Stay updated with latest campus news, events, and academic achievements.
             </p>
             <div className="d-flex gap-3 social-icons">
@@ -89,8 +89,7 @@ const Footer = () => {
             <h5 className="text-uppercase fw-bold mb-4">Contact</h5>
             <p className="mb-2">
               <i className="bi bi-geo-alt-fill me-2"></i> 
-              Sri Vasavi Institute of Technology,
-              Nandamuru, Andhra Pradesh, India
+              SVIT, Andhra Pradesh, India
             </p>
             <p className="mb-2">
               <i className="bi bi-envelope-fill me-2"></i>
