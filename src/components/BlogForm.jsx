@@ -1,29 +1,61 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
 const BlogForm = ({ isEditing = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const contentRef = useRef(null);
   
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [author, setAuthor] = useState('');
-  const [category, setCategory] = useState('events');
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    author: '',
+    category: 'events'
+  });
   const [attachment, setAttachment] = useState(null);
   const [currentAttachment, setCurrentAttachment] = useState(null);
   const [keepAttachment, setKeepAttachment] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(isEditing);
+  const [formTouched, setFormTouched] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   
   // Categories for the dropdown
   const categories = [
-    { value: 'events', label: 'College Events' },
-    { value: 'achievements', label: 'Student/Faculty Achievements' },
-    { value: 'research', label: 'Research Papers' }
+    { value: 'events', label: 'College Events', icon: 'bi-calendar-event', color: 'info' },
+    { value: 'achievements', label: 'Student/Faculty Achievements', icon: 'bi-trophy', color: 'success' },
+    { value: 'research', label: 'Research Papers', icon: 'bi-journal-text', color: 'warning' }
   ];
+  
+  // Update form data
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormTouched(true);
+  };
+  
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
+    const options = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    
+    try {
+      return new Date(dateString).toLocaleDateString(undefined, options);
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return '';
+    }
+  };
   
   useEffect(() => {
     if (isEditing) {
@@ -32,22 +64,26 @@ const BlogForm = ({ isEditing = false }) => {
           const response = await axios.get(`http://localhost:5000/api/blogs/${id}`);
           const blog = response.data;
           
-          setTitle(blog.title);
-          setContent(blog.content);
-          setAuthor(blog.author);
-          setCategory(blog.category || 'events');
+          setFormData({
+            title: blog.title || '',
+            content: blog.content || '',
+            author: blog.author || '',
+            category: blog.category || 'events'
+          });
           
           if (blog.attachment_url) {
             setCurrentAttachment({
               url: `http://localhost:5000${blog.attachment_url}`,
-              type: blog.attachment_type
+              type: blog.attachment_type,
+              name: blog.attachment_url.split('/').pop()
             });
           }
         } catch (err) {
-          setError('Failed to fetch blog details. Please try again.');
+          setError('Failed to fetch article details. Please try again.');
           console.error(err);
         } finally {
           setFetchLoading(false);
+          setFormTouched(false);
         }
       };
       
@@ -55,6 +91,7 @@ const BlogForm = ({ isEditing = false }) => {
     }
   }, [isEditing, id]);
   
+  // Handle file change
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -75,216 +112,451 @@ const BlogForm = ({ isEditing = false }) => {
       
       setAttachment(file);
       setError('');
+      setFormTouched(true);
     }
   };
   
+  // Remove selected attachment
   const removeAttachment = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     setAttachment(null);
+    setFormTouched(true);
   };
   
+  // Remove current attachment (when editing)
   const handleRemoveCurrentAttachment = () => {
     setKeepAttachment(false);
     setCurrentAttachment(null);
+    setFormTouched(true);
   };
   
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Form validation
+    if (!formData.title.trim()) {
+      setError('Title is required');
+      return;
+    }
+    
+    if (!formData.content.trim()) {
+      setError('Content is required');
+      return;
+    }
+    
+    if (!formData.author.trim()) {
+      setError('Author is required');
+      return;
+    }
+    
     setError('');
     setLoading(true);
     
     const token = localStorage.getItem('token');
     
     // Use FormData to handle file uploads
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('content', content);
-    formData.append('author', author);
-    formData.append('category', category);
+    const submitData = new FormData();
+    submitData.append('title', formData.title);
+    submitData.append('content', formData.content);
+    submitData.append('author', formData.author);
+    submitData.append('category', formData.category);
     
     if (attachment) {
-      formData.append('attachment', attachment);
+      submitData.append('attachment', attachment);
     }
     
     if (isEditing && currentAttachment && keepAttachment) {
-      formData.append('keepAttachment', 'true');
+      submitData.append('keepAttachment', 'true');
     }
     
     try {
       const headers = {
         'Authorization': `Bearer ${token}`,
-        // Don't set Content-Type header when using FormData; let the browser set it with the boundary
       };
       
       if (isEditing) {
-        await axios.put(`http://localhost:5000/api/blogs/${id}`, formData, { headers });
+        await axios.put(`http://localhost:5000/api/blogs/${id}`, submitData, { headers });
       } else {
-        await axios.post('http://localhost:5000/api/blogs', formData, { headers });
+        await axios.post('http://localhost:5000/api/blogs', submitData, { headers });
       }
       
       navigate('/admin');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save blog. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save article. Please try again.');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
   
-  // Function to determine if the file is an image
+  // Handle discard changes
+  const handleDiscard = () => {
+    if (!formTouched || window.confirm('Are you sure you want to discard your changes?')) {
+      navigate('/admin');
+    }
+  };
+  
+  // Check if file is an image
   const isImage = (fileType) => {
     return fileType && fileType.startsWith('image/');
   };
   
+  // Get category information
+  const getCategoryInfo = (categoryValue) => {
+    return categories.find(cat => cat.value === categoryValue) || categories[0];
+  };
+  
+  // Preview mode renderer
+  const renderPreview = () => {
+    const categoryInfo = getCategoryInfo(formData.category);
+    
+    return (
+      <div className="preview-container">
+        <div className="card shadow-sm mb-4">
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h2>Article Preview</h2>
+              <button 
+                className="btn btn-outline-primary"
+                onClick={() => setPreviewMode(false)}
+              >
+                <i className="bi bi-pencil me-2"></i> Back to Editor
+              </button>
+            </div>
+            
+            <div className="preview-content">
+              <div className="article-header mb-4">
+                <div className="d-flex align-items-center mb-3">
+                  <span className={`badge bg-${categoryInfo.color} px-3 py-2 rounded-pill`}>
+                    <i className={`bi ${categoryInfo.icon} me-1`}></i> {categoryInfo.label}
+                  </span>
+                </div>
+                
+                <h1 className="display-5 fw-bold">{formData.title || 'Untitled Article'}</h1>
+                
+                <div className="d-flex align-items-center mt-3">
+                  <div className="author-avatar me-2">
+                    <span className="author-initial">
+                      {formData.author ? formData.author.charAt(0).toUpperCase() : 'A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="author-name">
+                      {formData.author || 'Anonymous'}
+                    </span>
+                    <div className="text-muted small">
+                      <i className="bi bi-clock me-1"></i> {formatDate(new Date())}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Preview Attachment (if exists) */}
+              {(attachment || (currentAttachment && keepAttachment)) && (
+                <div className="preview-attachment mb-4">
+                  {attachment && isImage(attachment.type) ? (
+                    <img 
+                      src={URL.createObjectURL(attachment)} 
+                      alt="Preview" 
+                      className="img-fluid rounded shadow-sm"
+                      style={{ maxHeight: '400px' }}
+                    />
+                  ) : currentAttachment && keepAttachment && isImage(currentAttachment.type) ? (
+                    <img 
+                      src={currentAttachment.url} 
+                      alt="Preview" 
+                      className="img-fluid rounded shadow-sm"
+                      style={{ maxHeight: '400px' }}
+                    />
+                  ) : attachment && !isImage(attachment.type) ? (
+                    <div className="pdf-preview">
+                      <i className="bi bi-file-earmark-pdf display-4 text-danger"></i>
+                      <div>
+                        <h6 className="mb-1">PDF Document</h6>
+                        <p className="text-muted mb-0">{attachment.name}</p>
+                      </div>
+                    </div>
+                  ) : currentAttachment && keepAttachment && !isImage(currentAttachment.type) ? (
+                    <div className="pdf-preview">
+                      <i className="bi bi-file-earmark-pdf display-4 text-danger"></i>
+                      <div>
+                        <h6 className="mb-1">PDF Document</h6>
+                        <p className="text-muted mb-0">{currentAttachment.name}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              
+              {/* Preview Content */}
+              <div className="preview-article-content">
+                {formData.content ? (
+                  formData.content.split('\n\n').map((paragraph, index) => (
+                    <p key={index}>{paragraph}</p>
+                  ))
+                ) : (
+                  <p className="text-muted">No content added yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Loading state
   if (fetchLoading) {
     return (
-      <div className="text-center my-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
+      <div className="text-center my-5 py-5">
+        <div className="spinner-loader mb-3"></div>
+        <p className="text-muted">Loading article data...</p>
       </div>
     );
   }
   
+  // If in preview mode, show preview
+  if (previewMode) {
+    return renderPreview();
+  }
+  
   return (
-    <div>
-      <h2 className="mb-4">{isEditing ? 'Edit Article' : 'Create New Article'}</h2>
+    <div className="blog-form">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>{isEditing ? 'Edit Article' : 'Create New Article'}</h2>
+        <div className="d-flex gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={() => setPreviewMode(true)}
+            disabled={!formData.title && !formData.content}
+          >
+            <i className="bi bi-eye me-2"></i> Preview
+          </button>
+          {isEditing && (
+            <Link 
+              to={`/blog/${id}`}
+              className="btn btn-outline-secondary"
+              target="_blank"
+            >
+              <i className="bi bi-box-arrow-up-right me-2"></i> View Published
+            </Link>
+          )}
+        </div>
+      </div>
       
       {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
+        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+          <div className="d-flex align-items-center">
+            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+            <div>{error}</div>
+          </div>
+          <button 
+            type="button" 
+            className="btn-close" 
+            onClick={() => setError('')}
+            aria-label="Close"
+          ></button>
         </div>
       )}
       
-      <div className="card">
-        <div className="card-body">
+      <div className="card border-0 shadow-sm">
+        <div className="card-body p-4">
           <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label htmlFor="title" className="form-label">Title</label>
-              <input
-                type="text"
-                className="form-control"
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="mb-3">
-              <label htmlFor="author" className="form-label">Author</label>
-              <input
-                type="text"
-                className="form-control"
-                id="author"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="mb-3">
-              <label htmlFor="category" className="form-label">Category</label>
-              <select
-                className="form-select"
-                id="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                required
-              >
-                {categories.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="mb-3">
-              <label htmlFor="content" className="form-label">Content</label>
-              <textarea
-                className="form-control"
-                id="content"
-                rows="10"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                required
-              ></textarea>
-            </div>
-            
-            <div className="mb-3">
-              <label htmlFor="attachment" className="form-label">
-                Attachment (PDF or Images only, max 5MB)
-              </label>
-              <input
-                type="file"
-                className="form-control"
-                id="attachment"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".pdf,image/*"
-              />
-              {attachment && (
-                <div className="mt-2">
-                  <span className="badge bg-info me-2">
-                    {attachment.name} ({(attachment.size / 1024).toFixed(2)} KB)
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-danger"
-                    onClick={removeAttachment}
-                  >
-                    Remove
-                  </button>
+            <div className="row g-4">
+              <div className="col-md-8">
+                <div className="mb-4">
+                  <label htmlFor="title" className="form-label">
+                    <i className="bi bi-type-h1 me-2"></i>Article Title
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-lg"
+                    id="title"
+                    name="title"
+                    placeholder="Enter a descriptive title..."
+                    value={formData.title}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
-              )}
-            </div>
-            
-            {/* Display current attachment if editing */}
-            {isEditing && currentAttachment && keepAttachment && (
-              <div className="mb-3">
-                <label className="form-label">Current Attachment</label>
-                <div className="d-flex align-items-center">
-                  {isImage(currentAttachment.type) ? (
-                    <img
-                      src={currentAttachment.url}
-                      alt="Current attachment"
-                      style={{ maxHeight: '100px', maxWidth: '200px' }}
-                      className="me-3"
-                    />
-                  ) : (
-                    <span className="badge bg-secondary me-3">PDF Document</span>
-                  )}
-                  <div>
-                    <a
-                      href={currentAttachment.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-sm btn-outline-primary me-2"
-                    >
-                      View
-                    </a>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger"
-                      onClick={handleRemoveCurrentAttachment}
-                    >
-                      Remove
-                    </button>
+                
+                <div className="mb-4">
+                  <label htmlFor="content" className="form-label">
+                    <i className="bi bi-file-text me-2"></i>Content
+                  </label>
+                  <textarea
+                    className="form-control content-editor"
+                    id="content"
+                    name="content"
+                    ref={contentRef}
+                    rows="15"
+                    placeholder="Write your article content here..."
+                    value={formData.content}
+                    onChange={handleChange}
+                    required
+                  ></textarea>
+                  <div className="form-text">
+                    Use double line breaks for new paragraphs.
                   </div>
                 </div>
               </div>
-            )}
+              
+              <div className="col-md-4">
+                <div className="card bg-light border-0 mb-4">
+                  <div className="card-body">
+                    <h5 className="mb-3">Article Details</h5>
+                    
+                    <div className="mb-3">
+                      <label htmlFor="author" className="form-label">Author</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="author"
+                        name="author"
+                        placeholder="Your name"
+                        value={formData.author}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label htmlFor="category" className="form-label">Category</label>
+                      <select
+                        className="form-select"
+                        id="category"
+                        name="category"
+                        value={formData.category}
+                        onChange={handleChange}
+                        required
+                      >
+                        {categories.map((cat) => (
+                          <option key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label htmlFor="attachment" className="form-label">
+                        <i className="bi bi-paperclip me-2"></i>
+                        Attachment (PDF or Images)
+                      </label>
+                      <input
+                        type="file"
+                        className="form-control"
+                        id="attachment"
+                        name="attachment"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept=".pdf,image/*"
+                      />
+                      <div className="form-text">
+                        Maximum file size: 5MB
+                      </div>
+                      
+                      {attachment && (
+                        <div className="attachment-preview mt-3 p-2 bg-white rounded border">
+                          <div className="d-flex align-items-center">
+                            <div className="me-2">
+                              {isImage(attachment.type) ? (
+                                <i className="bi bi-image text-primary fs-4"></i>
+                              ) : (
+                                <i className="bi bi-file-pdf text-danger fs-4"></i>
+                              )}
+                            </div>
+                            <div className="flex-grow-1 text-truncate">
+                              <div className="small fw-bold">{attachment.name}</div>
+                              <div className="text-muted small">
+                                {(attachment.size / 1024).toFixed(1)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={removeAttachment}
+                            >
+                              <i className="bi bi-x-lg"></i>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Display current attachment if editing */}
+                    {isEditing && currentAttachment && keepAttachment && (
+                      <div className="current-attachment mb-3">
+                        <label className="form-label">Current Attachment</label>
+                        <div className="attachment-preview p-2 bg-white rounded border">
+                          <div className="d-flex align-items-center">
+                            <div className="me-2">
+                              {isImage(currentAttachment.type) ? (
+                                <i className="bi bi-image text-primary fs-4"></i>
+                              ) : (
+                                <i className="bi bi-file-pdf text-danger fs-4"></i>
+                              )}
+                            </div>
+                            <div className="flex-grow-1">
+                              <div className="small fw-bold">
+                                {currentAttachment.name}
+                              </div>
+                              <div className="mt-1">
+                                <a
+                                  href={currentAttachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-sm btn-outline-primary me-2"
+                                >
+                                  <i className="bi bi-eye me-1"></i> View
+                                </a>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={handleRemoveCurrentAttachment}
+                                >
+                                  <i className="bi bi-trash me-1"></i> Remove
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                  </div>
+                </div>
+                
+                {isEditing && (
+                  <div className="alert alert-info">
+                    <div className="d-flex">
+                      <i className="bi bi-info-circle-fill me-2 fs-5"></i>
+                      <div>
+                        <strong>Editing Article</strong>
+                        <p className="mb-0 small">
+                          Originally published on {formatDate(new Date())}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <hr className="my-4" />
             
             <div className="d-flex justify-content-between">
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={() => navigate('/admin')}
+                className="btn btn-outline-secondary"
+                onClick={handleDiscard}
               >
-                Cancel
+                <i className="bi bi-x-circle me-2"></i>
+                {formTouched ? 'Discard Changes' : 'Cancel'}
               </button>
               
               <button
@@ -295,10 +567,13 @@ const BlogForm = ({ isEditing = false }) => {
                 {loading ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Saving...
+                    {isEditing ? 'Updating...' : 'Publishing...'}
                   </>
                 ) : (
-                  isEditing ? 'Update Article' : 'Publish Article'
+                  <>
+                    <i className={`bi ${isEditing ? 'bi-check-circle' : 'bi-send'} me-2`}></i>
+                    {isEditing ? 'Update Article' : 'Publish Article'}
+                  </>
                 )}
               </button>
             </div>
